@@ -6,7 +6,9 @@ import type {
   CardVariant,
   CardPrices,
 } from './types';
+import { getCardmarketPrice } from './types';
 
+/** Get market price from a snapshot – prefers Cardmarket, falls back to TCGPlayer */
 export function getMarketPrice(
   snapshot: PriceSnapshot | null,
   cardId: string,
@@ -14,19 +16,34 @@ export function getMarketPrice(
 ): number | null {
   if (!snapshot) return null;
   const entry = snapshot.prices[cardId];
-  if (!entry?.tcgplayer?.prices) return null;
+  if (!entry) return null;
 
-  const variantPrices = entry.tcgplayer.prices[variant] as CardPrices | undefined;
-  return variantPrices?.market ?? null;
+  // Prefer Cardmarket (EUR, European market)
+  if (entry.cardmarket?.prices) {
+    const cm = entry.cardmarket.prices;
+    if (variant === 'reverseHolofoil') {
+      return cm.reverseHoloTrend ?? cm.reverseHoloSell ?? null;
+    }
+    return cm.trendPrice ?? cm.averageSellPrice ?? null;
+  }
+
+  // Fallback to TCGPlayer
+  if (entry.tcgplayer?.prices) {
+    const variantPrices = entry.tcgplayer.prices[variant] as CardPrices | undefined;
+    return variantPrices?.market ?? null;
+  }
+
+  return null;
 }
 
 export function getCurrency(
   snapshot: PriceSnapshot | null,
   cardId: string,
 ): string {
-  if (!snapshot) return 'USD';
+  if (!snapshot) return 'EUR';
   const entry = snapshot.prices[cardId];
-  return entry?.tcgplayer?.currency ?? 'USD';
+  if (entry?.cardmarket) return entry.cardmarket.currency ?? 'EUR';
+  return entry?.tcgplayer?.currency ?? 'EUR';
 }
 
 export function getSourceUrl(
@@ -35,6 +52,7 @@ export function getSourceUrl(
 ): string | null {
   if (!snapshot) return null;
   const entry = snapshot.prices[cardId];
+  if (entry?.cardmarket) return entry.cardmarket.url ?? null;
   return entry?.tcgplayer?.url ?? null;
 }
 
@@ -62,18 +80,24 @@ export function buildPortfolioRows(
       const card = cardMap.get(uc.cardId);
       if (!card) return null;
 
-      const currentPrice = getMarketPrice(latestPrices, uc.cardId, uc.variant);
+      // Use snapshot price if available, otherwise fall back to card's live Cardmarket price
+      const currentPrice = getMarketPrice(latestPrices, uc.cardId, uc.variant)
+        ?? getCardmarketPrice(card, uc.variant);
       const priceDayAgo = getMarketPrice(dayAgoPrices, uc.cardId, uc.variant);
       const priceWeekAgo = getMarketPrice(weekAgoPrices, uc.cardId, uc.variant);
       const priceMonthAgo = getMarketPrice(monthAgoPrices, uc.cardId, uc.variant);
       const priceYearAgo = getMarketPrice(yearAgoPrices, uc.cardId, uc.variant);
+
+      // If current from live API, use card's cardmarket URL
+      const sourceUrl = getSourceUrl(latestPrices, uc.cardId)
+        ?? card.cardmarket?.url ?? null;
 
       return {
         userCard: uc,
         card,
         currentPrice,
         currency: getCurrency(latestPrices, uc.cardId),
-        sourceUrl: getSourceUrl(latestPrices, uc.cardId),
+        sourceUrl,
         priceDayAgo,
         priceWeekAgo,
         priceMonthAgo,
@@ -89,7 +113,8 @@ export function buildPortfolioRows(
 
 export function formatCurrency(value: number | null, currency: string): string {
   if (value == null) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
+  const locale = currency === 'EUR' ? 'de-DE' : 'en-US';
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,

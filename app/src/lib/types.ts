@@ -25,6 +25,24 @@ export interface CardPrices {
   market?: number;
 }
 
+export interface CardmarketPrices {
+  averageSellPrice?: number;
+  lowPrice?: number;
+  trendPrice?: number;
+  germanProLow?: number;
+  suggestedPrice?: number;
+  reverseHoloSell?: number;
+  reverseHoloLow?: number;
+  reverseHoloTrend?: number;
+  lowPriceExPlus?: number;
+  avg1?: number;
+  avg7?: number;
+  avg30?: number;
+  reverseHoloAvg1?: number;
+  reverseHoloAvg7?: number;
+  reverseHoloAvg30?: number;
+}
+
 export interface Card {
   id: string;
   name: string;
@@ -49,6 +67,10 @@ export interface Card {
       '1stEditionHolofoil'?: CardPrices;
       '1stEditionNormal'?: CardPrices;
     };
+  };
+  cardmarket?: {
+    url: string;
+    prices: CardmarketPrices;
   };
 }
 
@@ -102,7 +124,14 @@ export interface PriceSourceData {
 
 export interface PriceSnapshot {
   syncedAt: string;
-  prices: Record<string, { tcgplayer?: PriceSourceData }>;
+  prices: Record<string, {
+    tcgplayer?: PriceSourceData;
+    cardmarket?: {
+      url: string;
+      currency: string;
+      prices: CardmarketPrices;
+    };
+  }>;
 }
 
 // ── Berechnete Tabellenzeile ──
@@ -121,4 +150,14 @@ export interface PortfolioRow {
   changeWeekPct: number | null;
   changeMonthPct: number | null;
   changeYearPct: number | null;
+}
+
+/** Get the Cardmarket trend price from a Card (for display in dropdowns etc.) */
+export function getCardmarketPrice(card: Card, variant: CardVariant = 'normal'): number | null {
+  const cm = card.cardmarket?.prices;
+  if (!cm) return null;
+  if (variant === 'reverseHolofoil') {
+    return cm.reverseHoloTrend ?? cm.reverseHoloSell ?? null;
+  }
+  return cm.trendPrice ?? cm.averageSellPrice ?? null;
 }

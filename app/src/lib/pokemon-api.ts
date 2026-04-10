@@ -52,7 +52,7 @@ export async function searchCardsApi(
   const escaped = query.replace(/"/g, '');
   const q = `name:"${escaped}*" OR number:"${escaped}"`;
 
-  const url = `${API_BASE}/cards?q=${encodeURIComponent(q)}&pageSize=${pageSize}&select=id,name,supertype,subtypes,hp,types,set,number,rarity,artist,images,tcgplayer`;
+  const url = `${API_BASE}/cards?q=${encodeURIComponent(q)}&pageSize=${pageSize}&select=id,name,supertype,subtypes,hp,types,set,number,rarity,artist,images,tcgplayer,cardmarket`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -104,7 +104,7 @@ export async function fetchCardsByIds(ids: string[]): Promise<Card[]> {
   const fetched: Card[] = [];
   for (const chunk of chunks) {
     const q = chunk.map((id) => `id:"${id}"`).join(' OR ');
-    const url = `${API_BASE}/cards?q=${encodeURIComponent(q)}&pageSize=${chunk.length}&select=id,name,supertype,subtypes,hp,types,set,number,rarity,artist,images,tcgplayer`;
+    const url = `${API_BASE}/cards?q=${encodeURIComponent(q)}&pageSize=${chunk.length}&select=id,name,supertype,subtypes,hp,types,set,number,rarity,artist,images,tcgplayer,cardmarket`;
 
     try {
       const res = await fetch(url);

@@ -23,9 +23,33 @@ interface TcgPlayerData {
   prices?: Record<string, TcgPlayerPriceSet>;
 }
 
+interface CardmarketPriceSet {
+  averageSellPrice?: number;
+  lowPrice?: number;
+  trendPrice?: number;
+  germanProLow?: number;
+  suggestedPrice?: number;
+  reverseHoloSell?: number;
+  reverseHoloLow?: number;
+  reverseHoloTrend?: number;
+  lowPriceExPlus?: number;
+  avg1?: number;
+  avg7?: number;
+  avg30?: number;
+  reverseHoloAvg1?: number;
+  reverseHoloAvg7?: number;
+  reverseHoloAvg30?: number;
+}
+
+interface CardmarketData {
+  url?: string;
+  prices?: CardmarketPriceSet;
+}
+
 interface ApiCard {
   id: string;
   tcgplayer?: TcgPlayerData;
+  cardmarket?: CardmarketData;
 }
 
 interface PriceEntry {
@@ -33,6 +57,11 @@ interface PriceEntry {
     url: string;
     currency: string;
     prices: Record<string, TcgPlayerPriceSet>;
+  };
+  cardmarket?: {
+    url: string;
+    currency: string;
+    prices: CardmarketPriceSet;
   };
 }
 
@@ -50,7 +79,7 @@ async function fetchCardPrices(cardIds: string[]): Promise<Map<string, PriceEntr
   for (let i = 0; i < cardIds.length; i += batchSize) {
     const batch = cardIds.slice(i, i + batchSize);
     const query = batch.map((id) => `id:"${id}"`).join(' OR ');
-    const url = `${API_BASE}/cards?q=${encodeURIComponent(query)}&select=id,tcgplayer&pageSize=${batchSize}`;
+    const url = `${API_BASE}/cards?q=${encodeURIComponent(query)}&select=id,tcgplayer,cardmarket&pageSize=${batchSize}`;
 
     console.log(`Fetching batch ${Math.floor(i / batchSize) + 1}...`);
     const res = await fetch(url, { headers });
@@ -61,14 +90,26 @@ async function fetchCardPrices(cardIds: string[]): Promise<Map<string, PriceEntr
 
     const data = (await res.json()) as { data: ApiCard[] };
     for (const card of data.data) {
+      const entry: PriceEntry = {};
+
       if (card.tcgplayer?.prices) {
-        results.set(card.id, {
-          tcgplayer: {
-            url: card.tcgplayer.url ?? '',
-            currency: 'USD',
-            prices: card.tcgplayer.prices,
-          },
-        });
+        entry.tcgplayer = {
+          url: card.tcgplayer.url ?? '',
+          currency: 'USD',
+          prices: card.tcgplayer.prices,
+        };
+      }
+
+      if (card.cardmarket?.prices) {
+        entry.cardmarket = {
+          url: card.cardmarket.url ?? '',
+          currency: 'EUR',
+          prices: card.cardmarket.prices,
+        };
+      }
+
+      if (entry.tcgplayer || entry.cardmarket) {
+        results.set(card.id, entry);
       }
     }
   }
