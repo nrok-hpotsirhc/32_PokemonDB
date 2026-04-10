@@ -6,12 +6,14 @@ import {
   loadLatestPrices,
   loadPriceSnapshot,
 } from '@/lib/data-loader';
+import { loadUserCardsLocal } from '@/lib/card-store';
 import { buildPortfolioRows } from '@/lib/price-utils';
 
 interface PortfolioData {
   rows: PortfolioRow[];
   cards: Card[];
   userCards: UserCard[];
+  setUserCards: (cards: UserCard[]) => void;
   latestPrices: PriceSnapshot | null;
   loading: boolean;
   error: string | null;
@@ -39,7 +41,9 @@ export function usePortfolioData(): PortfolioData {
         ]);
 
         setCards(cardsData);
-        setUserCards(userCardsData);
+        // Prefer localStorage user cards, fallback to JSON file
+        const localCards = loadUserCardsLocal();
+        setUserCards(localCards ?? userCardsData);
         setLatestPrices(latestData);
 
         // Load historical snapshots in parallel
@@ -86,6 +90,7 @@ export function usePortfolioData(): PortfolioData {
     rows,
     cards,
     userCards,
+    setUserCards,
     latestPrices,
     loading,
     error,

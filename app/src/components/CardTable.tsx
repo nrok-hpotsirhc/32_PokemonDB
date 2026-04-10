@@ -17,11 +17,12 @@ import { CurrencyBadge } from './CurrencyBadge';
 
 interface CardTableProps {
   rows: PortfolioRow[];
+  onRowClick?: (row: PortfolioRow) => void;
 }
 
 const columnHelper = createColumnHelper<PortfolioRow>();
 
-export function CardTable({ rows }: CardTableProps) {
+export function CardTable({ rows, onRowClick }: CardTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'currentPrice', desc: true },
   ]);
@@ -208,7 +209,11 @@ export function CardTable({ rows }: CardTableProps) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+              <tr
+                key={row.id}
+                onClick={() => onRowClick?.(row.original)}
+                className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+              >
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="px-3 py-2.5 whitespace-nowrap">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
