@@ -64,7 +64,11 @@ const translations = {
     'form.update': 'Aktualisieren',
     'form.cancel': 'Abbrechen',
     'form.noResults': 'Keine Karten gefunden',
-    'form.moreResults': 'weitere Ergebnisse – Suche verfeinern',
+    'form.moreResults': 'weitere Ergebnisse – klicken um alle zu sehen',
+    'form.searchHint': 'Suche nach Name (z.B. "Pikachu") oder Set-Code + Nr. (z.B. "PAL 072")',
+    'form.allResults': 'Alle Ergebnisse',
+    'form.close': 'Schließen',
+    'form.loadingAll': 'Lade alle Ergebnisse...',
 
     // Import
     'import.title': 'Aus Excel/CSV importieren',
@@ -163,7 +167,11 @@ const translations = {
     'form.update': 'Update Card',
     'form.cancel': 'Cancel',
     'form.noResults': 'No cards found',
-    'form.moreResults': 'more results – refine your search',
+    'form.moreResults': 'more results – click to show all',
+    'form.searchHint': 'Search by name (e.g. "Pikachu") or set code + no. (e.g. "PAL 072")',
+    'form.allResults': 'All Results',
+    'form.close': 'Close',
+    'form.loadingAll': 'Loading all results...',
 
     'import.title': 'Import from Excel/CSV',
     'import.drop': 'Drag & drop an Excel/CSV file here, or',
