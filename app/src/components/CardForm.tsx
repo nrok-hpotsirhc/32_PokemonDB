@@ -221,7 +221,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
           <select
             value={condition}
             onChange={(e) => setCondition(e.target.value as Condition)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           >
             <option value="NM">Near Mint</option>
             <option value="LP">Lightly Played</option>
@@ -235,7 +235,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
           <select
             value={variant}
             onChange={(e) => setVariant(e.target.value as CardVariant)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           >
             {availableVariants.map((v) => (
               <option key={v} value={v}>{v}</option>
@@ -253,7 +253,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
             min={1}
             value={quantity}
             onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           />
         </div>
         <div>
@@ -262,7 +262,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
             type="text"
             value={owner}
             onChange={(e) => setOwner(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           />
         </div>
       </div>
@@ -277,7 +277,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
             value={purchasePrice}
             onChange={(e) => setPurchasePrice(e.target.value)}
             placeholder="0.00"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           />
         </div>
         <div>
@@ -285,7 +285,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
           <select
             value={purchaseCurrency}
             onChange={(e) => setPurchaseCurrency(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           >
             <option value="EUR">EUR</option>
             <option value="USD">USD</option>
@@ -299,7 +299,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
             type="date"
             value={purchaseDate}
             onChange={(e) => setPurchaseDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           />
         </div>
       </div>
@@ -311,7 +311,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
           <select
             value={gradingService}
             onChange={(e) => setGradingService(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm"
           >
             <option value="">{t('form.none')}</option>
             <option value="PSA">PSA</option>
@@ -330,7 +330,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
             onChange={(e) => setGradingScore(e.target.value)}
             placeholder="e.g. 9.5"
             disabled={!gradingService}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm disabled:bg-gray-100 dark:disabled:bg-gray-900"
           />
         </div>
       </div>
@@ -342,7 +342,7 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm resize-none"
           placeholder={t('form.notesPlaceholder')}
         />
       </div>

@@ -197,7 +197,7 @@ export function CardTable({ rows, onRowClick }: CardTableProps) {
           placeholder={t('table.search')}
           value={globalFilter}
           onChange={(e) => setGlobalFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <span className="text-sm text-gray-500">
           {table.getFilteredRowModel().rows.length} {t('table.cardsCount')}
