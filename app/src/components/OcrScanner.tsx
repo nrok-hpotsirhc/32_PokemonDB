@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import type { Card } from '@/lib/types';
-import { searchCards, initCardSearch } from '@/lib/card-matcher';
+import { searchCardsApi } from '@/lib/pokemon-api';
 
 interface OcrScannerProps {
   cards: Card[];
@@ -68,13 +68,14 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       const text = data.text.trim();
       setOcrText(text);
 
-      // Try to match against card database
-      initCardSearch(cards);
+      // Try to match against pokemontcg.io API
       const lines = text.split('\n').filter((l) => l.trim().length > 2);
       const allMatches: Card[] = [];
-      for (const line of lines.slice(0, 5)) {
-        const matches = searchCards(line.trim(), 3);
-        allMatches.push(...matches);
+      for (const line of lines.slice(0, 3)) {
+        try {
+          const result = await searchCardsApi(line.trim(), 3);
+          allMatches.push(...result.cards);
+        } catch { /* skip failed searches */ }
       }
 
       // Deduplicate

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import type { Card, UserCard, PriceSnapshot, PortfolioRow } from '@/lib/types';
 import {
-  loadCards,
   loadUserCards,
   loadLatestPrices,
   loadPriceSnapshot,
 } from '@/lib/data-loader';
 import { loadUserCardsLocal } from '@/lib/card-store';
+import { fetchCardsByIds } from '@/lib/pokemon-api';
 import { buildPortfolioRows } from '@/lib/price-utils';
 
 interface PortfolioData {
@@ -34,17 +34,23 @@ export function usePortfolioData(): PortfolioData {
   useEffect(() => {
     async function load() {
       try {
-        const [cardsData, userCardsData, latestData] = await Promise.all([
-          loadCards(),
+        const [userCardsData, latestData] = await Promise.all([
           loadUserCards(),
           loadLatestPrices(),
         ]);
 
-        setCards(cardsData);
         // Prefer localStorage user cards, fallback to JSON file
         const localCards = loadUserCardsLocal();
-        setUserCards(localCards ?? userCardsData);
+        const resolvedUserCards = localCards ?? userCardsData;
+        setUserCards(resolvedUserCards);
         setLatestPrices(latestData);
+
+        // Fetch card data from pokemontcg.io API based on user's card IDs
+        const uniqueCardIds = [...new Set(resolvedUserCards.map((uc) => uc.cardId))];
+        if (uniqueCardIds.length > 0) {
+          const cardsData = await fetchCardsByIds(uniqueCardIds);
+          setCards(cardsData);
+        }
 
         // Load historical snapshots in parallel
         const today = new Date();

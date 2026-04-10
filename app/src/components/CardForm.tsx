@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Card, Condition, CardVariant } from '@/lib/types';
-import { searchCards, initCardSearch } from '@/lib/card-matcher';
+import { searchCardsApi, fetchCardById, type SearchResult } from '@/lib/pokemon-api';
 import { generateId, getAvailableVariants } from '@/lib/card-store';
 import type { UserCard } from '@/lib/types';
 
@@ -11,9 +11,13 @@ interface CardFormProps {
   editCard?: UserCard | null;
 }
 
+const MAX_VISIBLE = 5;
+
 export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Card[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [searching, setSearching] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [condition, setCondition] = useState<Condition>('NM');
@@ -26,18 +30,22 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
   const [gradingService, setGradingService] = useState('');
   const [gradingScore, setGradingScore] = useState('');
   const [notes, setNotes] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    initCardSearch(cards);
-  }, [cards]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
     if (editCard) {
+      // For edit mode: look up card in passed cards array or fetch from API
       const card = cards.find((c) => c.id === editCard.cardId);
       if (card) {
         setSelectedCard(card);
         setQuery(card.name);
+      } else {
+        void fetchCardById(editCard.cardId).then((c) => {
+          if (c) {
+            setSelectedCard(c);
+            setQuery(c.name);
+          }
+        });
       }
       setCondition(editCard.condition);
       setVariant(editCard.variant);
@@ -52,6 +60,8 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
     }
   }, [editCard, cards]);
 
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -62,16 +72,29 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  function handleSearch(value: string) {
+  const handleSearch = useCallback((value: string) => {
     setQuery(value);
-    if (value.length >= 2) {
-      setResults(searchCards(value, 8));
-      setShowDropdown(true);
-    } else {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (value.length < 2) {
       setResults([]);
+      setTotalCount(0);
       setShowDropdown(false);
+      return;
     }
-  }
+
+    setSearching(true);
+    debounceRef.current = setTimeout(() => {
+      void searchCardsApi(value, MAX_VISIBLE + 1).then((result: SearchResult) => {
+        setResults(result.cards.slice(0, MAX_VISIBLE));
+        setTotalCount(result.totalCount);
+        setShowDropdown(true);
+        setSearching(false);
+      }).catch(() => {
+        setSearching(false);
+      });
+    }, 350);
+  }, []);
 
   function handleSelectCard(card: Card) {
     setSelectedCard(card);
@@ -117,18 +140,23 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
           onFocus={() => results.length > 0 && setShowDropdown(true)}
-          placeholder="Search by card name..."
+          placeholder="Search by card name or number..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         />
+        {searching && (
+          <div className="absolute right-3 top-9">
+            <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" />
+          </div>
+        )}
         {showDropdown && results.length > 0 && (
-          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
+          <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-80 overflow-y-auto">
             {results.map((card) => (
               <button
                 key={card.id}
                 type="button"
                 onClick={() => handleSelectCard(card)}
-                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-blue-50 text-left"
+                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950 text-left"
               >
                 <img src={card.images.small} alt="" className="w-8 h-11 object-contain" />
                 <div>
@@ -139,6 +167,16 @@ export function CardForm({ cards, onSubmit, onCancel, editCard }: CardFormProps)
                 </div>
               </button>
             ))}
+            {totalCount > MAX_VISIBLE && (
+              <div className="px-3 py-2 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                +{totalCount - MAX_VISIBLE} weitere Ergebnisse – Suche verfeinern
+              </div>
+            )}
+          </div>
+        )}
+        {showDropdown && !searching && results.length === 0 && query.length >= 2 && (
+          <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm text-gray-500">
+            Keine Karten gefunden
           </div>
         )}
         {selectedCard && (
