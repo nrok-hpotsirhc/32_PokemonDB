@@ -108,6 +108,9 @@ const CARD_NUMBER_RE = /(?:SV)?(\d{1,4})\s*\/\s*(\d{1,4})/i;
 /** Set code pattern on card bottom: typically 2-6 uppercase letters */
 const SET_CODE_RE = /\b([A-Z]{2,6})\b/;
 
+/** Common short uppercase tokens that are NOT set codes */
+const FALSE_POSITIVE_SET_CODES = new Set(['HP', 'EX', 'GX', 'LV', 'SP', 'FB', 'VS', 'GL']);
+
 /**
  * Clean up the OCR text for the Pokemon name ROI.
  * Returns the best candidate name string.
@@ -157,9 +160,7 @@ function parseSetInfo(raw: string): { setCode: string | null; cardNumber: string
   // Remove the number portion first to avoid false matches
   const textWithoutNum = numMatch ? text.replace(numMatch[0], '') : text;
   const codeMatch = SET_CODE_RE.exec(textWithoutNum);
-  // Filter out common false positives
-  const falsePositives = new Set(['HP', 'EX', 'GX', 'LV', 'SP', 'FB', 'VS', 'GL']);
-  const setCode = codeMatch && !falsePositives.has(codeMatch[1]!) ? codeMatch[1]! : null;
+  const setCode = codeMatch && !FALSE_POSITIVE_SET_CODES.has(codeMatch[1]!) ? codeMatch[1]! : null;
 
   return { setCode, cardNumber };
 }
@@ -286,9 +287,12 @@ export function OcrScanner({ onCardDetected }: OcrScannerProps) {
       // If we have a card number, boost cards whose number matches
       let sorted = unique;
       if (cardNumber) {
+        const normalizedNum = cardNumber.replace(/^0+/, '') || '0';
         sorted = [...unique].sort((a, b) => {
-          const aMatch = a.number === cardNumber ? 1 : 0;
-          const bMatch = b.number === cardNumber ? 1 : 0;
+          const aNorm = a.number.replace(/^0+/, '') || '0';
+          const bNorm = b.number.replace(/^0+/, '') || '0';
+          const aMatch = aNorm === normalizedNum ? 1 : 0;
+          const bMatch = bNorm === normalizedNum ? 1 : 0;
           return bMatch - aMatch;
         });
       }
@@ -338,23 +342,23 @@ export function OcrScanner({ onCardDetected }: OcrScannerProps) {
         {status === 'camera' && (
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute inset-4 border-2 border-white/60 rounded-lg" />
-            {/* ROI overlay: name area (top-left) */}
+            {/* ROI overlay: name area (top-left) – derived from NAME_ROI */}
             <div
               className="absolute border-2 border-yellow-400/80 rounded bg-yellow-400/10"
-              style={{ left: '3%', top: '2%', width: '70%', height: '10%' }}
+              style={{ left: `${NAME_ROI.x * 100}%`, top: `${NAME_ROI.y * 100}%`, width: `${NAME_ROI.w * 100}%`, height: `${NAME_ROI.h * 100}%` }}
             />
             <span
               className="absolute text-yellow-300 text-[9px] font-bold"
-              style={{ left: '4%', top: '3%' }}
+              style={{ left: `${(NAME_ROI.x + 0.01) * 100}%`, top: `${(NAME_ROI.y + 0.01) * 100}%` }}
             >NAME</span>
-            {/* ROI overlay: set info area (bottom-left) */}
+            {/* ROI overlay: set info area (bottom-left) – derived from SET_ROI */}
             <div
               className="absolute border-2 border-cyan-400/80 rounded bg-cyan-400/10"
-              style={{ left: '3%', top: '90%', width: '50%', height: '8%' }}
+              style={{ left: `${SET_ROI.x * 100}%`, top: `${SET_ROI.y * 100}%`, width: `${SET_ROI.w * 100}%`, height: `${SET_ROI.h * 100}%` }}
             />
             <span
               className="absolute text-cyan-300 text-[9px] font-bold"
-              style={{ left: '4%', top: '91%' }}
+              style={{ left: `${(SET_ROI.x + 0.01) * 100}%`, top: `${(SET_ROI.y + 0.01) * 100}%` }}
             >SET #</span>
             <p className="absolute bottom-3 left-0 right-0 text-center text-white text-xs opacity-70">
               {t('scan.position')}
