@@ -15,10 +15,10 @@ interface OcrScannerProps {
 const CARD_RATIO = 5 / 7;
 
 // ── ROI definitions (fractions of card width/height) ────────────────────────
-// Top-left ROI: Pokemon name area
-const NAME_ROI = { x: 0.03, y: 0.02, w: 0.70, h: 0.10 };
-// Bottom-left ROI: set info, card number, total count
-const SET_ROI  = { x: 0.03, y: 0.90, w: 0.50, h: 0.08 };
+// Top-left ROI: Pokemon name area (generous margin for camera shake)
+const NAME_ROI = { x: 0.02, y: 0.01, w: 0.85, h: 0.14 };
+// Bottom-left ROI: set info, card number, total count (generous margin for camera shake)
+const SET_ROI  = { x: 0.02, y: 0.86, w: 0.65, h: 0.13 };
 
 /**
  * Crop the center of the video frame to the Pokemon card portrait aspect ratio.
