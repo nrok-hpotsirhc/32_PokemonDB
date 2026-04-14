@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Card } from '@/lib/types';
 import { formatSetNumber } from '@/lib/types';
 import { translateGermanName } from '@/lib/german-pokemon-names';
@@ -14,6 +14,7 @@ interface OcrScannerProps {
 /** Pokemon card aspect ratio: 63mm × 88mm ≈ 5:7 */
 const CARD_RATIO = 5 / 7;
 const MAX_VISIBLE_MATCHES = 5;
+const MAX_NAME_WORDS = 4;
 const NON_NAME_PREFIXES = new Set(['basis', 'basic', 'stage', 'stufe', 'evolution']);
 
 // ── ROI definitions (fractions of card width/height) ────────────────────────
@@ -223,7 +224,7 @@ function extractNameCandidatesFromROI(raw: string): string[] {
       words.shift();
     }
 
-    for (let length = words.length; length >= 1; length--) {
+    for (let length = Math.min(words.length, MAX_NAME_WORDS); length >= 1; length--) {
       for (let start = 0; start + length <= words.length; start++) {
         const phrase = words.slice(start, start + length).join(' ').trim();
         if (phrase.length < 2) continue;
@@ -241,17 +242,9 @@ function extractNameCandidatesFromROI(raw: string): string[] {
 
 function findCardsForDetectedName(
   raw: string,
-  cardPool: Card[],
+  cardsByName: Map<string, Card[]>,
 ): { matchedName: string; cards: Card[]; candidates: string[] } | null {
-  if (cardPool.length === 0) return null;
-
-  const cardsByName = new Map<string, Card[]>();
-  for (const card of cardPool) {
-    const key = normalizeNameLookup(card.name);
-    const existing = cardsByName.get(key);
-    if (existing) existing.push(card);
-    else cardsByName.set(key, [card]);
-  }
+  if (cardsByName.size === 0) return null;
 
   const candidates = extractNameCandidatesFromROI(raw);
 
@@ -292,6 +285,19 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
     onCardDetected(card);
   }, [onCardDetected]);
 
+  const searchPool = useMemo(() => mergeCards(catalogCards, cards), [catalogCards, cards]);
+
+  const cardsByName = useMemo(() => {
+    const mappedCards = new Map<string, Card[]>();
+    for (const card of searchPool) {
+      const key = normalizeNameLookup(card.name);
+      const existing = mappedCards.get(key);
+      if (existing) existing.push(card);
+      else mappedCards.set(key, [card]);
+    }
+    return mappedCards;
+  }, [searchPool]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -299,7 +305,8 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       .then((loadedCards) => {
         if (mounted) setCatalogCards(loadedCards);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.error('Failed to load local card catalog for OCR scan.', err);
         if (mounted) setCatalogCards([]);
       });
 
@@ -362,8 +369,7 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       await nameWorker.terminate();
 
       const nameRaw = nameResult.data.text.trim();
-      const searchPool = mergeCards(catalogCards, cards);
-      const detectedMatch = findCardsForDetectedName(nameRaw, searchPool);
+      const detectedMatch = findCardsForDetectedName(nameRaw, cardsByName);
       const candidatePreview = detectedMatch?.candidates.join(' | ') ?? '–';
 
       const debugText = [
@@ -390,7 +396,7 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       setError(err instanceof Error ? err.message : 'OCR failed');
       setStatus('idle');
     }
-  }, [cards, catalogCards, stopCamera]);
+  }, [cardsByName, stopCamera]);
 
   const handleShowAll = useCallback(() => {
     if (!ocrQuery || allResults.length === 0) return;
