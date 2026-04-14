@@ -303,17 +303,25 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
 
     void loadCards()
       .then((loadedCards) => {
-        if (mounted) setCatalogCards(loadedCards);
+        if (mounted) {
+          setCatalogCards(loadedCards);
+          setError(null);
+        }
       })
       .catch((err: unknown) => {
         console.error('Failed to load local card catalog for OCR scan.', err);
-        if (mounted) setCatalogCards([]);
+        if (mounted) {
+          setCatalogCards([]);
+          if (cards.length === 0) {
+            setError('Card catalog could not be loaded. Please reload the page.');
+          }
+        }
       });
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [cards.length]);
 
   const startCamera = useCallback(async () => {
     setError(null);
