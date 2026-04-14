@@ -1,23 +1,30 @@
 import { read, utils, writeFile } from 'xlsx';
-import type { UserCard, Condition, CardVariant, Card } from './types';
+import type { UserCard, Condition, CardVariant, Card, GradingService } from './types';
 import { getCardmarketPrice } from './types';
 import { generateId } from './card-store';
 
 interface ImportRow {
+  addedAt?: string | number | Date;
   cardId?: string;
   name?: string;
   setCode?: string;
+  setName?: string;
   number?: string;
+  rarity?: string;
+  owner?: string;
   condition?: string;
   variant?: string;
   quantity?: number;
-  owner?: string;
+  currentPrice?: number;
+  currentPriceCurrency?: string;
   purchasePrice?: number;
   purchaseCurrency?: string;
   purchaseDate?: string;
-  notes?: string;
   gradingService?: string;
   gradingScore?: number;
+  notes?: string;
+  sourceUrl?: string;
+  imageUrl?: string;
 }
 
 export interface ImportResult {
@@ -39,6 +46,91 @@ function getSetCode(card?: Card): string {
 const VALID_VARIANTS: CardVariant[] = [
   'holofoil', 'reverseHolofoil', 'normal', '1stEditionHolofoil', '1stEditionNormal',
 ];
+
+const IMPORT_TEMPLATE_FIELDS = [
+  'cardId',
+  'name',
+  'setCode',
+  'setName',
+  'number',
+  'rarity',
+  'owner',
+  'condition',
+  'variant',
+  'quantity',
+  'purchasePrice',
+  'purchaseCurrency',
+  'purchaseDate',
+  'gradingService',
+  'gradingScore',
+  'notes',
+  'addedAt',
+] as const;
+
+function normalizeText(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+function normalizeNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (normalized.length === 0) return undefined;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function normalizeDate(value: unknown): string | undefined {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const parsed = utils.format_cell({ t: 'n', v: value, z: 'yyyy-mm-dd' });
+    return parsed || undefined;
+  }
+  return normalizeText(value);
+}
+
+function normalizeGradingService(value: unknown): GradingService | undefined {
+  const upper = normalizeText(value)?.toUpperCase();
+  if (upper === 'PSA' || upper === 'BGS' || upper === 'CGC') return upper;
+  return undefined;
+}
+
+function createExportRow(userCard: UserCard, card?: Card) {
+  const currentPrice = card ? getCardmarketPrice(card, userCard.variant) : null;
+
+  return {
+    cardId: userCard.cardId,
+    name: card?.name ?? '',
+    setCode: getSetCode(card),
+    setName: card?.set.name ?? '',
+    number: card?.number ?? '',
+    rarity: card?.rarity ?? '',
+    owner: userCard.owner,
+    condition: userCard.condition,
+    variant: userCard.variant,
+    quantity: userCard.quantity,
+    currentPrice: currentPrice ?? '',
+    currentPriceCurrency: currentPrice != null ? CARDMARKET_CURRENCY : '',
+    purchasePrice: userCard.purchasePrice ?? '',
+    purchaseCurrency: userCard.purchaseCurrency ?? '',
+    purchaseDate: userCard.purchaseDate ?? '',
+    gradingService: userCard.grade?.service ?? '',
+    gradingScore: userCard.grade?.score ?? '',
+    notes: userCard.notes ?? '',
+    addedAt: userCard.addedAt,
+    sourceUrl: card?.cardmarket?.url ?? card?.tcgplayer?.url ?? '',
+    imageUrl: card?.images.large ?? '',
+  };
+}
 
 function normalizeCondition(raw: string): Condition | null {
   const upper = raw.toUpperCase().trim();
@@ -67,41 +159,54 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportResult {
   const sheetName = wb.SheetNames[0];
   if (!sheetName) return { success: [], errors: [{ row: 0, message: 'No sheet found' }] };
 
-  const rows = utils.sheet_to_json<ImportRow>(wb.Sheets[sheetName]!);
+  const rows = utils.sheet_to_json<ImportRow>(wb.Sheets[sheetName]!, {
+    raw: false,
+    defval: '',
+  });
   const success: UserCard[] = [];
   const errors: ImportResult['errors'] = [];
 
   rows.forEach((row, idx) => {
     const rowNum = idx + 2; // 1-indexed + header
 
-    if (!row.cardId && !row.name) {
+    const cardId = normalizeText(row.cardId);
+    const name = normalizeText(row.name);
+
+    if (!cardId && !name) {
       errors.push({ row: rowNum, message: 'Missing cardId or name' });
       return;
     }
 
-    const condition = normalizeCondition(row.condition ?? 'NM');
+    const condition = normalizeCondition(normalizeText(row.condition) ?? 'NM');
     if (!condition) {
       errors.push({ row: rowNum, message: `Invalid condition: ${row.condition}` });
       return;
     }
 
-    const cardId = row.cardId ?? `${row.setCode ?? 'unknown'}-${row.number ?? '0'}`;
+    const quantity = normalizeNumber(row.quantity);
+    const gradingService = normalizeGradingService(row.gradingService);
+    const gradingScore = normalizeNumber(row.gradingScore);
+    const purchasePrice = normalizeNumber(row.purchasePrice);
+    const purchaseCurrency = normalizeText(row.purchaseCurrency);
+    const purchaseDate = normalizeDate(row.purchaseDate);
+    const addedAt = normalizeDate(row.addedAt) ?? new Date().toISOString();
+    const derivedCardId = cardId ?? `${normalizeText(row.setCode) ?? 'unknown'}-${normalizeText(row.number) ?? '0'}`;
 
     success.push({
       id: generateId(),
-      cardId,
-      owner: row.owner ?? 'default',
+      cardId: derivedCardId,
+      owner: normalizeText(row.owner) ?? 'default',
       condition,
-      variant: normalizeVariant(row.variant ?? 'normal'),
-      quantity: Math.max(1, Math.floor(row.quantity ?? 1)),
-      purchasePrice: row.purchasePrice,
-      purchaseCurrency: row.purchaseCurrency ?? 'EUR',
-      purchaseDate: row.purchaseDate,
-      notes: row.notes,
-      grade: row.gradingService && row.gradingScore
-        ? { service: row.gradingService as 'PSA' | 'BGS' | 'CGC', score: row.gradingScore }
+      variant: normalizeVariant(normalizeText(row.variant) ?? 'normal'),
+      quantity: Math.max(1, Math.floor(quantity ?? 1)),
+      purchasePrice,
+      purchaseCurrency: purchaseCurrency ?? 'EUR',
+      purchaseDate,
+      notes: normalizeText(row.notes),
+      grade: gradingService && gradingScore != null
+        ? { service: gradingService, score: gradingScore }
         : undefined,
-      addedAt: new Date().toISOString(),
+      addedAt,
     });
   });
 
@@ -114,34 +219,7 @@ export function exportToExcel(
   filename = createExportFilename(),
 ): void {
   const cardMap = new Map(cards.map((card) => [card.id, card]));
-  const data = userCards.map((uc) => {
-    const card = cardMap.get(uc.cardId);
-    const currentPrice = card ? getCardmarketPrice(card, uc.variant) : null;
-
-    return {
-      cardId: uc.cardId,
-      name: card?.name ?? '',
-      setCode: getSetCode(card),
-      setName: card?.set.name ?? '',
-      number: card?.number ?? '',
-      rarity: card?.rarity ?? '',
-      owner: uc.owner,
-      condition: uc.condition,
-      variant: uc.variant,
-      quantity: uc.quantity,
-      currentPrice: currentPrice ?? '',
-      currentPriceCurrency: currentPrice != null ? CARDMARKET_CURRENCY : '',
-      purchasePrice: uc.purchasePrice ?? '',
-      purchaseCurrency: uc.purchaseCurrency ?? '',
-      purchaseDate: uc.purchaseDate ?? '',
-      gradingService: uc.grade?.service ?? '',
-      gradingScore: uc.grade?.score ?? '',
-      notes: uc.notes ?? '',
-      addedAt: uc.addedAt,
-      sourceUrl: card?.cardmarket?.url ?? card?.tcgplayer?.url ?? '',
-      imageUrl: card?.images.large ?? '',
-    };
-  });
+  const data = userCards.map((uc) => createExportRow(uc, cardMap.get(uc.cardId)));
 
   const ws = utils.json_to_sheet(data);
   const wb = utils.book_new();
@@ -150,23 +228,29 @@ export function exportToExcel(
 }
 
 export function downloadTemplate(): void {
-  const template = [
-    {
-      cardId: 'base1-4',
-      owner: 'default',
-      condition: 'NM',
-      variant: 'holofoil',
-      quantity: 1,
-      purchasePrice: 100,
-      purchaseCurrency: 'EUR',
-      purchaseDate: '2024-01-01',
-      gradingService: '',
-      gradingScore: '',
-      notes: 'Example card',
-    },
-  ];
+  const templateRow = {
+    cardId: 'base1-4',
+    name: 'Charizard',
+    setCode: 'BS',
+    setName: 'Base',
+    number: '4',
+    rarity: 'Rare Holo',
+    owner: 'default',
+    condition: 'NM',
+    variant: 'holofoil',
+    quantity: 1,
+    purchasePrice: 100,
+    purchaseCurrency: 'EUR',
+    purchaseDate: '2024-01-01',
+    gradingService: '',
+    gradingScore: '',
+    notes: 'Example card',
+    addedAt: '2024-01-01T00:00:00.000Z',
+  };
 
-  const ws = utils.json_to_sheet(template);
+  const ws = utils.json_to_sheet([templateRow], {
+    header: [...IMPORT_TEMPLATE_FIELDS],
+  });
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, 'Template');
   writeFile(wb, 'pokemon-import-template.xlsx');
