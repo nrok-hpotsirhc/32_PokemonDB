@@ -15,7 +15,7 @@ const translations = {
     'tab.dashboard': 'Dashboard',
     'tab.portfolio': 'Portfolio',
     'tab.add': 'Karte hinzufügen',
-    'tab.import': 'Import',
+    'tab.import': 'Import / Export',
     'tab.scan': 'Scan',
 
     // Dashboard
@@ -192,7 +192,7 @@ const translations = {
     'tab.dashboard': 'Dashboard',
     'tab.portfolio': 'Portfolio',
     'tab.add': 'Add Card',
-    'tab.import': 'Import',
+    'tab.import': 'Import / Export',
     'tab.scan': 'Scan',
 
     'dash.portfolioValue': 'Portfolio Value',
