@@ -262,12 +262,10 @@ function SectionLoader({ label }: { label: string }) {
     <div
       role="status"
       aria-live="polite"
+      aria-label={label}
       className="flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-10 text-sm text-gray-600 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
     >
-      <div
-        aria-label={label}
-        className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"
-      />
+      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
       <span className="ml-3">{label}</span>
     </div>
   );
