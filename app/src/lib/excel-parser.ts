@@ -29,6 +29,10 @@ function createExportFilename(): string {
   return `pokemon-collection-${new Date().toISOString().slice(0, 10)}.xlsx`;
 }
 
+function getSetCode(card?: Card): string {
+  return card?.set.ptcgoCode ?? card?.set.id?.toUpperCase() ?? '';
+}
+
 const VALID_VARIANTS: CardVariant[] = [
   'holofoil', 'reverseHolofoil', 'normal', '1stEditionHolofoil', '1stEditionNormal',
 ];
@@ -109,11 +113,12 @@ export function exportToExcel(
   const cardMap = new Map(cards.map((card) => [card.id, card]));
   const data = userCards.map((uc) => {
     const card = cardMap.get(uc.cardId);
+    const currentPrice = card ? getCardmarketPrice(card, uc.variant) : null;
 
     return {
       cardId: uc.cardId,
       name: card?.name ?? '',
-      setCode: card?.set.ptcgoCode ?? card?.set.id?.toUpperCase() ?? '',
+      setCode: getSetCode(card),
       setName: card?.set.name ?? '',
       number: card?.number ?? '',
       rarity: card?.rarity ?? '',
@@ -121,8 +126,8 @@ export function exportToExcel(
       condition: uc.condition,
       variant: uc.variant,
       quantity: uc.quantity,
-      currentPrice: card ? getCardmarketPrice(card, uc.variant) ?? '' : '',
-      currentPriceCurrency: card?.cardmarket ? 'EUR' : '',
+      currentPrice: currentPrice ?? '',
+      currentPriceCurrency: currentPrice != null ? 'EUR' : '',
       purchasePrice: uc.purchasePrice ?? '',
       purchaseCurrency: uc.purchaseCurrency ?? '',
       purchaseDate: uc.purchaseDate ?? '',
