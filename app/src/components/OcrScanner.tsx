@@ -15,6 +15,8 @@ interface OcrScannerProps {
 /** Pokemon card aspect ratio: 63mm × 88mm ≈ 5:7 */
 const CARD_RATIO = 5 / 7;
 const MAX_VISIBLE_MATCHES = 5;
+const MIN_MODAL_FETCH = 50;
+const MAX_MODAL_FETCH = 250;
 const MAX_NAME_WORDS = 4;
 const MIN_NAME_LETTERS = 3;
 const NON_NAME_PREFIXES = new Set(['basis', 'basic', 'stage', 'stufe', 'evolution']);
@@ -410,8 +412,9 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
         }
         setStatus('result');
 
-        // Fetch the full list from the API (like CardForm does)
+        // Fetch from the API to get the real total count and top results
         try {
+          // Fetch one extra to determine whether there are more results beyond the visible set
           const initial = await searchCardsApi(query, MAX_VISIBLE_MATCHES + 1);
           const apiCards = initial.cards;
           const apiTotal = initial.totalCount;
@@ -426,7 +429,8 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
             setAllResults(detectedMatch.cards);
             setTotalCount(detectedMatch.cards.length);
           }
-        } catch {
+        } catch (e) {
+          console.error('API search failed for OCR-detected name, using local results', e);
           // API failed – keep local catalog results
           if (detectedMatch.cards.length > 0) {
             setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
@@ -452,11 +456,12 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
     setShowAllModal(true);
     setLoadingAll(true);
     try {
-      const limit = Math.min(Math.max(totalCount, 50), 250);
+      const limit = Math.min(Math.max(totalCount, MIN_MODAL_FETCH), MAX_MODAL_FETCH);
       const result = await searchCardsApi(ocrQuery, limit);
       setAllResults(result.cards);
       setTotalCount(result.totalCount);
-    } catch {
+    } catch (e) {
+      console.error('Failed to load full OCR results from API', e);
       // Keep whatever we already have in allResults
     } finally {
       setLoadingAll(false);
