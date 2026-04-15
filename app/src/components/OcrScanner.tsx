@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Card } from '@/lib/types';
-import { formatSetNumber } from '@/lib/types';
+import { formatSetNumber, getCardmarketPrice } from '@/lib/types';
 import { translateGermanName } from '@/lib/german-pokemon-names';
+import { searchCardsApi } from '@/lib/pokemon-api';
 import { useI18n } from '@/lib/i18n';
 import { loadCards } from '@/lib/data-loader';
 
@@ -14,6 +15,8 @@ interface OcrScannerProps {
 /** Pokemon card aspect ratio: 63mm × 88mm ≈ 5:7 */
 const CARD_RATIO = 5 / 7;
 const MAX_VISIBLE_MATCHES = 5;
+const MIN_MODAL_FETCH = 50;
+const MAX_MODAL_FETCH = 250;
 const MAX_NAME_WORDS = 4;
 const MIN_NAME_LETTERS = 3;
 const NON_NAME_PREFIXES = new Set(['basis', 'basic', 'stage', 'stufe', 'evolution']);
@@ -397,28 +400,73 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       setOcrText(debugText);
       setShowAllModal(false);
 
-      if (detectedMatch && detectedMatch.cards.length > 0) {
-        setOcrQuery(detectedMatch.matchedName);
-        setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
-        setAllResults(detectedMatch.cards);
-        setTotalCount(detectedMatch.cards.length);
+      if (detectedMatch && detectedMatch.matchedName) {
+        const query = detectedMatch.matchedName;
+        setOcrQuery(query);
+
+        // Show local matches immediately while the API request is in flight
+        if (detectedMatch.cards.length > 0) {
+          setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
+          setAllResults(detectedMatch.cards);
+          setTotalCount(detectedMatch.cards.length);
+        }
+        setStatus('result');
+
+        // Fetch from the API to get the real total count and top results
+        try {
+          // Fetch one extra to determine whether there are more results beyond the visible set
+          const initial = await searchCardsApi(query, MAX_VISIBLE_MATCHES + 1);
+          const apiCards = initial.cards;
+          const apiTotal = initial.totalCount;
+
+          if (apiCards.length > 0) {
+            setMatchedCards(apiCards.slice(0, MAX_VISIBLE_MATCHES));
+            setTotalCount(apiTotal);
+            // Store the initial batch; full list is loaded on demand in handleShowAll
+          } else if (detectedMatch.cards.length > 0) {
+            // API returned nothing – keep local catalog results
+            setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
+            setAllResults(detectedMatch.cards);
+            setTotalCount(detectedMatch.cards.length);
+          }
+        } catch (e) {
+          console.error('API search failed for OCR-detected name, using local results', e);
+          // API failed – keep local catalog results
+          if (detectedMatch.cards.length > 0) {
+            setMatchedCards(detectedMatch.cards.slice(0, MAX_VISIBLE_MATCHES));
+            setAllResults(detectedMatch.cards);
+            setTotalCount(detectedMatch.cards.length);
+          }
+        }
       } else {
         setOcrQuery('');
         setMatchedCards([]);
         setAllResults([]);
         setTotalCount(0);
+        setStatus('result');
       }
-      setStatus('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'OCR failed');
       setStatus('idle');
     }
   }, [cardsByName, stopCamera]);
 
-  const handleShowAll = useCallback(() => {
-    if (!ocrQuery || allResults.length === 0) return;
+  const handleShowAll = useCallback(async () => {
+    if (!ocrQuery) return;
     setShowAllModal(true);
-  }, [allResults.length, ocrQuery]);
+    setLoadingAll(true);
+    try {
+      const limit = Math.min(Math.max(totalCount, MIN_MODAL_FETCH), MAX_MODAL_FETCH);
+      const result = await searchCardsApi(ocrQuery, limit);
+      setAllResults(result.cards);
+      setTotalCount(result.totalCount);
+    } catch (e) {
+      console.error('Failed to load full OCR results from API', e);
+      // Keep whatever we already have in allResults
+    } finally {
+      setLoadingAll(false);
+    }
+  }, [ocrQuery, totalCount]);
 
   const reset = useCallback(() => {
     stopCamera();
@@ -542,13 +590,20 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
                     className="w-full flex items-center gap-3 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 text-left"
                   >
                     <img src={card.images.small} alt="" className="w-10 h-14 object-contain" />
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium">{card.name}</div>
                       <div className="text-xs text-gray-500">
-                        {card.set.name} · {formatSetNumber(card.set, card.number)} · {tr('rarity', card.rarity ?? '')}
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">{formatSetNumber(card.set, card.number)}</span> · {card.set.name} · {tr('rarity', card.rarity ?? '')}
                       </div>
                     </div>
-                    <span className="ml-auto text-xs text-blue-600">{t('scan.select')}</span>
+                    {(() => {
+                      const price = getCardmarketPrice(card);
+                      return price != null ? (
+                        <span className="text-sm font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">
+                          {price.toFixed(2)} €
+                        </span>
+                      ) : null;
+                    })()}
                   </button>
                 ))}
               </div>
@@ -596,10 +651,17 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{card.name}</div>
                         <div className="text-xs text-gray-500">
-                          {card.set.name} · {formatSetNumber(card.set, card.number)} · {tr('rarity', card.rarity ?? '')}
+                          <span className="font-semibold text-gray-700 dark:text-gray-300">{formatSetNumber(card.set, card.number)}</span> · {card.set.name} · {tr('rarity', card.rarity ?? '')}
                         </div>
                       </div>
-                      <span className="ml-auto text-xs text-blue-600">{t('scan.select')}</span>
+                      {(() => {
+                        const price = getCardmarketPrice(card);
+                        return price != null ? (
+                          <span className="text-sm font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">
+                            {price.toFixed(2)} €
+                          </span>
+                        ) : null;
+                      })()}
                     </button>
                   ))}
                 </div>
