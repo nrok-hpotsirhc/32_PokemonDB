@@ -15,12 +15,14 @@ interface OcrScannerProps {
 const CARD_RATIO = 5 / 7;
 const MAX_VISIBLE_MATCHES = 5;
 const MAX_NAME_WORDS = 4;
+const MIN_NAME_LETTERS = 5;
 const NON_NAME_PREFIXES = new Set(['basis', 'basic', 'stage', 'stufe', 'evolution']);
+const NON_NAME_WORDS = new Set([...NON_NAME_PREFIXES, 'hp', 'kp', 'pokemon']);
 
 // ── ROI definitions (fractions of card width/height) ────────────────────────
-// Top-left ROI: only the actual Pokemon name area, skipping the tiny status text
-// in the upper-left corner ("Basis", "Stage 1", etc.).
-const NAME_ROI = { x: 0.16, y: 0.01, w: 0.68, h: 0.14 };
+// Search the broader upper card area because the embedded Pokémon name is
+// expected somewhere in the top section, but not at a fixed position.
+const NAME_ROI = { x: 0.04, y: 0.01, w: 0.92, h: 0.3 };
 
 /**
  * Crop the center of the video frame to the Pokemon card portrait aspect ratio.
@@ -180,6 +182,15 @@ function normalizeNameLookup(value: string): string {
     .trim();
 }
 
+function countLetters(value: string): number {
+  const matches = value.match(/\p{L}/gu);
+  return matches ? matches.length : 0;
+}
+
+function isIgnoredNameWord(word: string): boolean {
+  return NON_NAME_WORDS.has(normalizeNameLookup(word));
+}
+
 function mergeCards(primary: Card[], secondary: Card[]): Card[] {
   const merged = new Map<string, Card>();
   for (const card of primary) merged.set(card.id, card);
@@ -189,7 +200,7 @@ function mergeCards(primary: Card[], secondary: Card[]): Card[] {
 
 /**
  * Extract candidate name phrases from the OCR text for the name ROI.
- * Returns phrases ordered from longest to shortest.
+ * Returns phrases ordered by top-to-bottom scan position, then by phrase size.
  */
 function extractNameCandidatesFromROI(raw: string): string[] {
   const lines = raw
@@ -197,20 +208,21 @@ function extractNameCandidatesFromROI(raw: string): string[] {
     .map((l) => l.trim())
     .filter((l) => l.length >= 2);
 
-  const candidates = new Set<string>();
+  const candidates = new Map<string, { lineIndex: number; wordCount: number; letters: number }>();
 
-  for (const line of lines) {
+  for (const [lineIndex, line] of lines.entries()) {
     // Remove noise characters that Tesseract sometimes injects
     let cleaned = line
       .replace(/[|_{}[\]<>~`@#$%^&*()+=]/g, ' ')
+      .replace(/\b(?:(?:hp|kp)\s*\d+|\d+\s*(?:hp|kp))\b/gi, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
 
     if (cleaned.length < 2) continue;
 
     // Skip lines that are clearly HP indicators or numbers
-    if (/^\d+\s*HP$/i.test(cleaned)) continue;
-    if (/^HP\s*\d+$/i.test(cleaned)) continue;
+    if (/^\d+\s*(?:HP|KP)$/i.test(cleaned)) continue;
+    if (/^(?:HP|KP)\s*\d+$/i.test(cleaned)) continue;
     if (/^\d+$/.test(cleaned)) continue;
 
     const words = cleaned
@@ -220,24 +232,42 @@ function extractNameCandidatesFromROI(raw: string): string[] {
 
     while (words.length > 0) {
       const firstWord = words[0];
-      if (!firstWord || !NON_NAME_PREFIXES.has(normalizeNameLookup(firstWord))) break;
+      if (!firstWord || !isIgnoredNameWord(firstWord)) break;
       words.shift();
     }
 
     for (let length = Math.min(words.length, MAX_NAME_WORDS); length >= 1; length--) {
       for (let start = 0; start + length <= words.length; start++) {
-        const phrase = words.slice(start, start + length).join(' ').trim();
+        const phraseWords = words.slice(start, start + length);
+        if (phraseWords.some((word) => isIgnoredNameWord(word))) continue;
+
+        const phrase = phraseWords.join(' ').trim();
         if (phrase.length < 2) continue;
         if (/^\d+$/.test(phrase)) continue;
-        candidates.add(phrase);
+        const letters = countLetters(phrase);
+        if (letters < MIN_NAME_LETTERS) continue;
+        if (!candidates.has(phrase)) {
+          candidates.set(phrase, {
+            lineIndex,
+            wordCount: phraseWords.length,
+            letters,
+          });
+        }
       }
     }
   }
 
-  return Array.from(candidates).sort((a, b) => {
-    const tokenDiff = b.split(/\s+/).length - a.split(/\s+/).length;
-    return tokenDiff || b.length - a.length;
-  });
+  return Array.from(candidates.entries())
+    .sort((a, b) => {
+      const lineDiff = a[1].lineIndex - b[1].lineIndex;
+      if (lineDiff !== 0) return lineDiff;
+
+      const wordDiff = b[1].wordCount - a[1].wordCount;
+      if (wordDiff !== 0) return wordDiff;
+
+      return b[1].letters - a[1].letters;
+    })
+    .map(([phrase]) => phrase);
 }
 
 function findCardsForDetectedName(
@@ -363,14 +393,14 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
     try {
       const { createWorker, PSM } = await import('tesseract.js');
 
-      // Extract only the name ROI from the captured card image.
+      // Scan the broader upper area because the name can appear anywhere there.
       const nameCanvas = extractROI(canvasRef.current, NAME_ROI, { scale: 3 });
       const nameBlob = await canvasToBlob(nameCanvas);
 
-      // OCR only the name ROI – use 'deu+eng' for German card name support.
+      // OCR the upper card section – use 'deu+eng' for German card name support.
       const nameWorker = await createWorker('deu+eng');
       await nameWorker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_LINE,
+        tessedit_pageseg_mode: PSM.AUTO,
       });
 
       const nameResult = await nameWorker.recognize(nameBlob);
@@ -381,7 +411,7 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
       const candidatePreview = detectedMatch?.candidates.join(' | ') ?? '–';
 
       const debugText = [
-        `[Name ROI] ${nameRaw}`,
+        `[Top ROI] ${nameRaw}`,
         `→ Kandidaten: ${candidatePreview}`,
         `→ Gültiger Name: ${detectedMatch?.matchedName || '–'}`,
       ].join('\n');
@@ -453,7 +483,7 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
         {status === 'camera' && (
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute inset-4 border-2 border-white/60 rounded-lg" />
-            {/* ROI overlay: name area (top-left) – derived from NAME_ROI */}
+            {/* ROI overlay: scanned top area – derived from NAME_ROI */}
             <div
               className="absolute border-2 border-yellow-400/80 rounded bg-yellow-400/10"
               style={{ left: `${NAME_ROI.x * 100}%`, top: `${NAME_ROI.y * 100}%`, width: `${NAME_ROI.w * 100}%`, height: `${NAME_ROI.h * 100}%` }}
@@ -461,7 +491,7 @@ export function OcrScanner({ cards, onCardDetected }: OcrScannerProps) {
             <span
               className="absolute text-yellow-300 text-[9px] font-bold"
               style={{ left: `${(NAME_ROI.x + 0.01) * 100}%`, top: `${(NAME_ROI.y + 0.01) * 100}%` }}
-            >NAME</span>
+            >TOP</span>
             <p className="absolute bottom-3 left-0 right-0 text-center text-white text-xs opacity-70">
               {t('scan.position')}
             </p>
