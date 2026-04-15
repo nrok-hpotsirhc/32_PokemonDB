@@ -183,7 +183,7 @@ function normalizeNameLookup(value: string): string {
 }
 
 function countLetters(value: string): number {
-  const matches = value.match(/[A-Za-zÀ-ÿ]/g);
+  const matches = value.match(/\p{L}/gu);
   return matches ? matches.length : 0;
 }
 
@@ -200,7 +200,7 @@ function mergeCards(primary: Card[], secondary: Card[]): Card[] {
 
 /**
  * Extract candidate name phrases from the OCR text for the name ROI.
- * Returns phrases ordered from longest to shortest.
+ * Returns phrases ordered by top-to-bottom scan position, then by phrase size.
  */
 function extractNameCandidatesFromROI(raw: string): string[] {
   const lines = raw
@@ -208,9 +208,9 @@ function extractNameCandidatesFromROI(raw: string): string[] {
     .map((l) => l.trim())
     .filter((l) => l.length >= 2);
 
-  const candidates = new Set<string>();
+  const candidates = new Map<string, { lineIndex: number; wordCount: number; letters: number }>();
 
-  for (const line of lines) {
+  for (const [lineIndex, line] of lines.entries()) {
     // Remove noise characters that Tesseract sometimes injects
     let cleaned = line
       .replace(/[|_{}[\]<>~`@#$%^&*()+=]/g, ' ')
@@ -245,13 +245,30 @@ function extractNameCandidatesFromROI(raw: string): string[] {
         const phrase = phraseWords.join(' ').trim();
         if (phrase.length < 2) continue;
         if (/^\d+$/.test(phrase)) continue;
-        if (countLetters(phrase) < MIN_NAME_LETTERS) continue;
-        candidates.add(phrase);
+        const letters = countLetters(phrase);
+        if (letters < MIN_NAME_LETTERS) continue;
+        if (!candidates.has(phrase)) {
+          candidates.set(phrase, {
+            lineIndex,
+            wordCount: phraseWords.length,
+            letters,
+          });
+        }
       }
     }
   }
 
-  return Array.from(candidates);
+  return Array.from(candidates.entries())
+    .sort((a, b) => {
+      const lineDiff = a[1].lineIndex - b[1].lineIndex;
+      if (lineDiff !== 0) return lineDiff;
+
+      const wordDiff = b[1].wordCount - a[1].wordCount;
+      if (wordDiff !== 0) return wordDiff;
+
+      return b[1].letters - a[1].letters;
+    })
+    .map(([phrase]) => phrase);
 }
 
 function findCardsForDetectedName(
