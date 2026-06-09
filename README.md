@@ -102,12 +102,12 @@ Open `http://localhost:5173/` in your browser.
 
 Your site will be live at `https://<YOUR_USERNAME>.github.io/PCPT/`.
 
-### 4. Enable daily price sync
+### 4. Enable weekly price sync
 
-`.github/workflows/price-sync.yml` runs daily at 06:00 UTC.
+`.github/workflows/price-sync.yml` runs weekly (Saturdays) at 06:00 UTC.
 
 - Add your [pokemontcg.io](https://pokemontcg.io/) API key as a repository secret named `POKEMON_TCG_API_KEY` (optional — free tier works without it, just slower)
-- Trigger manually: **Actions → Daily Price Sync → Run workflow**
+- Trigger manually: **Actions → Weekly Price Sync → Run workflow**
 - Prices are written to `data/prices-latest.json` and appended to `data/price-history.json`
 
 ---
@@ -156,11 +156,11 @@ PCPT/
 │   ├── prices-latest.json      # Latest price snapshot (updated daily)
 │   └── price-history.json      # Compact per-card daily history
 ├── scripts/
-│   ├── sync-prices.ts          # Daily price sync (run by GitHub Actions)
+│   ├── sync-prices.ts          # Weekly price sync (run by GitHub Actions)
 │   └── migrate-prices.ts       # One-time migration: daily files → history file
 └── .github/workflows/
     ├── deploy.yml              # Build & deploy to GitHub Pages
-    └── price-sync.yml          # Daily price fetch & commit
+    └── price-sync.yml          # Weekly price fetch & commit
 ```
 
 ---

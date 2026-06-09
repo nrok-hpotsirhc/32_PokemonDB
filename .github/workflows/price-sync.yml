@@ -1,8 +1,8 @@
-name: Daily Price Sync
+name: Weekly Price Sync
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 6 * * 6'  # Saturdays at 06:00 UTC
   workflow_dispatch:
 
 # Only one price-sync runs at a time; a second trigger cancels any in-progress run

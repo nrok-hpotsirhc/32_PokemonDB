@@ -44,7 +44,7 @@ Vollständig gehostet auf **GitHub Pages** – kein eigener Server/Backend nöti
 | **Tabelle**      | TanStack Table             | Sortierung, Filter, Pagination out-of-the-box |
 | **Charts**       | Sparkline-Lib (z.B. recharts, lightweight) | Kursverlauf-Miniatur pro Karte       |
 | **Datenhaltung** | JSON-Dateien im Git-Repo   | Versioniert, kostenlos, unkritische Daten     |
-| **Preis-Sync**   | GitHub Actions (Cron)      | Täglich/stündlich Preise abrufen              |
+| **Preis-Sync**   | GitHub Actions (Cron)      | Wöchentlich Preise abrufen (Samstags)         |
 | **Excel Import** | SheetJS (xlsx)             | Client-side Excel Parsing                     |
 | **OCR**          | Tesseract.js (WASM)       | Läuft im Browser, kein Server nötig           |
 | **Hosting**      | GitHub Pages               | Kostenlos, automatisches Deployment           |
@@ -58,7 +58,7 @@ Vollständig gehostet auf **GitHub Pages** – kein eigener Server/Backend nöti
 │   ├── AGENTS.md                  # Diese Datei
 │   └── workflows/
 │       ├── deploy.yml             # Build & Deploy zu GitHub Pages
-│       └── price-sync.yml         # Cron: Täglicher Preis-Abruf
+│       └── price-sync.yml         # Cron: Wöchentlicher Preis-Abruf (Samstags)
 ├── data/
 │   ├── cards.json                 # Kartenstammdaten (aus API befüllt)
 │   ├── user-cards.json            # Nutzer-Sammlung (Karte + Zustand + Kaufpreis)
@@ -196,10 +196,10 @@ Gleiches Format wie `prices-latest.json`, archiviert pro Tag für Historienvergl
 
 ```yaml
 # .github/workflows/price-sync.yml
-name: Daily Price Sync
+name: Weekly Price Sync
 on:
   schedule:
-    - cron: '0 6 * * *'   # Täglich um 06:00 UTC
+    - cron: '0 6 * * 6'   # Samstags um 06:00 UTC
   workflow_dispatch:        # Manuell auslösbar
 
 jobs:
